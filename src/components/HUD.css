@@ -1,0 +1,81 @@
+.hud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  padding: 12px 16px;
+  width: 100%;
+  max-width: 540px;
+  margin: 0 auto 8px;
+}
+
+.hud-item,
+.timer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 8px 12px;
+  min-width: 80px;
+  flex: 1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--border-color);
+  transition: background 0.3s, border-color 0.3s;
+}
+
+.hud-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.hud-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+/* Timer danger state */
+.timer {
+  border-color: var(--border-color);
+  transition: background 0.3s, border-color 0.3s;
+}
+
+.timer.danger {
+  background: #fff0f0;
+  border-color: #e53e3e;
+  animation: timerPulse 0.8s ease-in-out infinite;
+}
+
+.timer.danger .hud-value {
+  color: #e53e3e;
+}
+
+.dark .timer.danger {
+  background: #3a1a1a;
+  border-color: #e53e3e;
+}
+
+@keyframes timerPulse {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.06); }
+}
+
+.best .hud-value {
+  color: #d4a017;
+}
+
+@media (max-width: 480px) {
+  .hud-item,
+  .timer {
+    padding: 6px 10px;
+    min-width: 56px;
+  }
+  .hud-value {
+    font-size: 1.1rem;
+  }
+}
