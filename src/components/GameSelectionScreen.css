@@ -1,0 +1,125 @@
+/* Game Selection Screen */
+.gss-wrapper {
+  min-height: 100vh;
+  background: linear-gradient(145deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 16px 60px;
+  color: #f1f5f9;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+.gss-header {
+  text-align: center;
+  margin-bottom: 48px;
+}
+
+.gss-logo {
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 900;
+  background: linear-gradient(135deg, #818cf8, #a78bfa, #60a5fa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0 0 8px;
+  letter-spacing: -0.5px;
+}
+
+.gss-subtitle {
+  font-size: 1.05rem;
+  color: #64748b;
+  margin: 0;
+}
+
+/* Cards grid */
+.gss-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 24px;
+  width: 100%;
+  max-width: 680px;
+}
+
+.gss-card {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 16px;
+  padding: 28px 24px 24px;
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.gss-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(99,102,241,0.08), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+
+.gss-card:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 12px 36px rgba(99,102,241,0.25);
+  border-color: #6366f1;
+}
+
+.gss-card:hover::before {
+  opacity: 1;
+}
+
+.gss-card:focus-visible {
+  outline: 2px solid #818cf8;
+  outline-offset: 2px;
+}
+
+.gss-card-emoji {
+  font-size: 2.5rem;
+  line-height: 1;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.gss-card-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin: 0;
+}
+
+.gss-card-desc {
+  font-size: 0.9rem;
+  color: #94a3b8;
+  margin: 0;
+  line-height: 1.5;
+  flex: 1;
+}
+
+.gss-card-play {
+  margin-top: 12px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #818cf8;
+  letter-spacing: 0.03em;
+  transition: letter-spacing 0.2s;
+}
+
+.gss-card:hover .gss-card-play {
+  letter-spacing: 0.08em;
+}
+
+/* Footer */
+.gss-footer {
+  margin-top: 56px;
+  font-size: 0.78rem;
+  color: #334155;
+  text-align: center;
+}

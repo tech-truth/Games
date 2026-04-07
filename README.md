@@ -1,6 +1,35 @@
-# 🧠 Memory Flip Game
+# 🎮 Game Arcade
 
-A browser-based Memory Card Matching Game built with React + Vite.
+A browser-based game arcade built with React + Vite.
+
+## Games
+
+### 🧠 Memory Flip
+Match pairs of cards before time runs out. Build streaks for bonus points!
+
+### ❄️ Time Freeze Runner
+**Core Idea:** *Time moves only when the player moves.*
+
+If the player stops → the entire world freezes.
+If the player moves → everything resumes.
+
+**Controls:**
+| Key | Action |
+| --- | --- |
+| `W` / `ArrowUp` | Move up |
+| `S` / `ArrowDown` | Move down |
+| `A` / `ArrowLeft` | Move left |
+| `D` / `ArrowRight` | Move right |
+| `R` | Restart |
+| `Esc` | Back to selection |
+| *(no key pressed)* | **Time freezes** |
+
+**Mechanics:**
+- 🔵 **Player** (blue circle) — navigate from the top-left to the green EXIT
+- 🔴 **Enemies** (red squares) — two patrol enemies and one chasing shooter
+- 🟠 **Bullets** — fired by the shooter enemy; freeze mid-air when you stop
+- 🟢 **EXIT** (green rectangle) — reach it to win
+- ❄️ Frozen state dims all enemies/bullets so you can safely plan your path
 
 ![Memory Flip Game](https://github.com/user-attachments/assets/92e6432a-f935-4eca-aef5-493b787db20a)
 
@@ -50,18 +79,25 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 ```
 src/
 ├── components/
-│   ├── Card.jsx / Card.css          # Individual card with 3D flip animation
-│   ├── GameBoard.jsx / GameBoard.css # Responsive grid of cards
-│   ├── HUD.jsx / HUD.css            # Timer, level, streak, score display
-│   ├── GameOver.jsx / GameOver.css  # Game over overlay + leaderboard
-│   └── LevelComplete.jsx / LevelComplete.css  # Level transition overlay
+│   ├── GameSelectionScreen.jsx / .css  # Landing screen — lists all games
+│   ├── Card.jsx / Card.css             # Memory Flip: individual card
+│   ├── GameBoard.jsx / GameBoard.css   # Memory Flip: responsive grid
+│   ├── HUD.jsx / HUD.css               # Memory Flip: timer / score display
+│   ├── GameOver.jsx / GameOver.css     # Memory Flip: game over overlay
+│   └── LevelComplete.jsx / .css        # Memory Flip: level transition overlay
+├── games/
+│   ├── index.js                        # Game registry (add new games here)
+│   ├── MemoryFlipGame.jsx              # Memory Flip game wrapper
+│   └── time-freeze-runner/
+│       ├── TimeFreezeRunner.jsx        # Time Freeze Runner (Canvas + RAF)
+│       └── TimeFreezeRunner.css
 ├── hooks/
-│   └── useGameLogic.js              # All game state & logic (useState/useEffect)
+│   └── useGameLogic.js                 # Memory Flip: game state & logic
 ├── utils/
-│   ├── gameUtils.js                 # Card generation, shuffle, scoring, localStorage
-│   └── sounds.js                   # Web Audio API sound effects
-├── App.jsx / App.css                # Root component & theme variables
-└── main.jsx                         # React entry point
+│   ├── gameUtils.js                    # Card generation, shuffle, scoring
+│   └── sounds.js                       # Web Audio API sound effects
+├── App.jsx / App.css                   # Root component — manages game selection
+└── main.jsx                            # React entry point
 ```
 
 ## Tech Stack
