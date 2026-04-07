@@ -1,0 +1,17 @@
+.game-board {
+  display: grid;
+  gap: 12px;
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+  width: 100%;
+  max-width: 540px;
+  margin: 0 auto;
+}
+
+@media (max-width: 480px) {
+  .game-board {
+    gap: 8px;
+    padding: 8px;
+  }
+}
