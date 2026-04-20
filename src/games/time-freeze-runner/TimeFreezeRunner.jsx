@@ -13,6 +13,10 @@ const ENEMY_SIZE = 22;
 const BULLET_R = 5;
 const GOAL_W = 60;
 const GOAL_H = 60;
+const BOSS_SPREAD_OFFSET = 0.35;
+const BOSS_SPEED_VARIATION = 0.2;
+const BOSS_RING_ANGLE_JITTER = 0.45;
+const BOSS_PATTERN_COUNT = 3;
 
 const LEVELS = [
   { id: 1, speed: 1, spawnRate: 1000, targetScore: 20 },
@@ -35,7 +39,12 @@ const WALLS = [
 const GOAL = { x: 700, y: 460, w: GOAL_W, h: GOAL_H };
 
 function getLevelConfig(levelId) {
-  return LEVELS.find((level) => level.id === levelId) || LEVELS[0];
+  const level = LEVELS.find((item) => item.id === levelId);
+  if (!level) {
+    console.warn(`Invalid level id: ${levelId}, defaulting to level 1.`);
+    return LEVELS[0];
+  }
+  return level;
 }
 
 function createEnemies() {
@@ -92,7 +101,7 @@ function spawnBossPattern(state, enemy, level, dx, dy, dist) {
   const bx = enemy.x + enemy.w / 2;
   const by = enemy.y + enemy.h / 2;
   const baseAngle = Math.atan2(dy, dx);
-  const pattern = Math.floor(Math.random() * 3);
+  const pattern = Math.floor(Math.random() * BOSS_PATTERN_COUNT);
 
   if (pattern === 0) {
     addBullet(state, bx, by, baseAngle, bulletSpeed);
@@ -100,15 +109,22 @@ function spawnBossPattern(state, enemy, level, dx, dy, dist) {
   }
 
   if (pattern === 1) {
-    [-0.35, 0, 0.35].forEach((offset) => {
-      addBullet(state, bx, by, baseAngle + offset, bulletSpeed * (1 + Math.random() * 0.2));
+    [-BOSS_SPREAD_OFFSET, 0, BOSS_SPREAD_OFFSET].forEach((offset) => {
+      addBullet(
+        state,
+        bx,
+        by,
+        baseAngle + offset,
+        bulletSpeed * (1 + Math.random() * BOSS_SPEED_VARIATION),
+      );
     });
     return;
   }
 
   const burstCount = 4 + Math.floor(Math.random() * 3);
   for (let i = 0; i < burstCount; i += 1) {
-    const randomAngle = (Math.PI * 2 * i) / burstCount + (Math.random() - 0.5) * 0.45;
+    const randomAngle = (Math.PI * 2 * i) / burstCount
+      + (Math.random() - 0.5) * BOSS_RING_ANGLE_JITTER;
     addBullet(state, bx, by, randomAngle, bulletSpeed * (0.8 + Math.random() * 0.5));
   }
 
@@ -256,7 +272,7 @@ function update(state, keys, dt) {
 
   if (!level.bossMode) {
     const reachedGoal = circleRect(state.player.x, state.player.y, r, GOAL.x, GOAL.y, GOAL.w, GOAL.h);
-    const reachedTargetScore = level.targetScore && state.score >= level.targetScore;
+    const reachedTargetScore = typeof level.targetScore === 'number' && state.score >= level.targetScore;
     if (reachedGoal || reachedTargetScore) {
       state.levelComplete = true;
       state.phase = 'level-complete';
@@ -423,7 +439,13 @@ export default function TimeFreezeRunner({ onBack }) {
   }, [startLevel]);
 
   const startNextLevel = useCallback(() => {
-    startLevel(Math.min(stateRef.current.currentLevel + 1, LEVELS.length));
+    const currentIndex = LEVELS.findIndex((level) => level.id === stateRef.current.currentLevel);
+    if (currentIndex < 0 || currentIndex >= LEVELS.length - 1) {
+      return;
+    }
+
+    const nextLevel = LEVELS[currentIndex + 1];
+    startLevel(nextLevel.id);
   }, [startLevel]);
 
   const playAgain = useCallback(() => {
@@ -483,7 +505,7 @@ export default function TimeFreezeRunner({ onBack }) {
         </button>
       </div>
 
-      <div className="tfr-stats" aria-live="polite">
+      <div className="tfr-stats">
         <span>Level: {hud.currentLevel}</span>
         <span>Score: {hud.score}</span>
         {hud.survivalTimer !== null && <span>Survival: {hud.survivalTimer}s</span>}
