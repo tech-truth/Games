@@ -1,25 +1,31 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import PropTypes from 'prop-types';
 import './TimeFreezeRunner.css';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const W = 800;
 const H = 550;
-const PLAYER_SPEED = 180;   // px/s
-const ENEMY_SPEED = 90;     // px/s
-const BULLET_SPEED = 220;   // px/s
-const SHOOT_INTERVAL = 2.5; // seconds between shots
+const PLAYER_SPEED = 180; // px/s
+const ENEMY_SPEED = 90; // px/s
+const BULLET_SPEED = 220; // px/s
 const PLAYER_R = 14;
 const ENEMY_SIZE = 22;
 const BULLET_R = 5;
 const GOAL_W = 60;
 const GOAL_H = 60;
 
+const LEVELS = [
+  { id: 1, speed: 1, spawnRate: 1000, targetScore: 20 },
+  { id: 2, speed: 1.25, spawnRate: 900, targetScore: 40 },
+  { id: 3, speed: 1.5, spawnRate: 700, targetScore: 60 },
+  { id: 4, speed: 2, spawnRate: 500, bossMode: true, survivalSeconds: 60 },
+];
+
 // ─── Level layout ────────────────────────────────────────────────────────────
 const WALLS = [
-  { x: 180, y:  60, w: 16, h: 180 },
+  { x: 180, y: 60, w: 16, h: 180 },
   { x: 320, y: 180, w: 200, h: 16 },
-  { x: 520, y:  80, w: 16, h: 180 },
+  { x: 520, y: 80, w: 16, h: 180 },
   { x: 100, y: 340, w: 200, h: 16 },
   { x: 400, y: 340, w: 16, h: 160 },
   { x: 580, y: 280, w: 180, h: 16 },
@@ -28,23 +34,87 @@ const WALLS = [
 
 const GOAL = { x: 700, y: 460, w: GOAL_W, h: GOAL_H };
 
-function createState() {
+function getLevelConfig(levelId) {
+  return LEVELS.find((level) => level.id === levelId) || LEVELS[0];
+}
+
+function createEnemies() {
+  return [
+    { id: 0, x: 360, y: 130, w: ENEMY_SIZE, h: ENEMY_SIZE, type: 'patrol-h', dir: 1, bound0: 220, bound1: 600 },
+    { id: 1, x: 140, y: 220, w: ENEMY_SIZE, h: ENEMY_SIZE, type: 'patrol-v', dir: 1, bound0: 100, bound1: 480 },
+    { id: 2, x: 600, y: 150, w: ENEMY_SIZE, h: ENEMY_SIZE, type: 'shooter', shootCooldown: 0 },
+  ];
+}
+
+function createState(levelId = 1) {
+  const level = getLevelConfig(levelId);
+
   return {
-    phase: 'playing', // 'playing' | 'won' | 'lost'
+    phase: 'playing', // 'playing' | 'lost' | 'level-complete' | 'won'
     timeFrozen: true,
-    elapsed: 0,       // total active (unfrozen) time
+    elapsed: 0,
+    currentLevel: level.id,
+    gameWon: false,
+    levelComplete: false,
+    survivalTimer: level.bossMode ? level.survivalSeconds : null,
+    score: 0,
     player: { x: 60, y: 60, r: PLAYER_R },
-    enemies: [
-      // horizontal patrol
-      { id: 0, x: 360, y: 130, w: ENEMY_SIZE, h: ENEMY_SIZE, type: 'patrol-h', dir: 1, bound0: 220, bound1: 600 },
-      // vertical patrol
-      { id: 1, x: 140, y: 220, w: ENEMY_SIZE, h: ENEMY_SIZE, type: 'patrol-v', dir: 1, bound0: 100, bound1: 480 },
-      // shooter that chases slowly
-      { id: 2, x: 600, y: 150, w: ENEMY_SIZE, h: ENEMY_SIZE, type: 'shooter', shootCooldown: 0 },
-    ],
+    enemies: createEnemies(),
     bullets: [],
     nextBulletId: 0,
   };
+}
+
+function getUiSnapshot(state) {
+  return {
+    currentLevel: state.currentLevel,
+    score: Math.floor(state.score),
+    survivalTimer: state.survivalTimer === null ? null : Math.ceil(state.survivalTimer),
+    gameWon: state.gameWon,
+    levelComplete: state.levelComplete,
+    phase: state.phase,
+  };
+}
+
+function addBullet(state, x, y, angle, speed) {
+  state.bullets.push({
+    id: state.nextBulletId++,
+    x,
+    y,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed,
+    r: BULLET_R,
+  });
+}
+
+function spawnBossPattern(state, enemy, level, dx, dy, dist) {
+  const bulletSpeed = BULLET_SPEED * level.speed;
+  const bx = enemy.x + enemy.w / 2;
+  const by = enemy.y + enemy.h / 2;
+  const baseAngle = Math.atan2(dy, dx);
+  const pattern = Math.floor(Math.random() * 3);
+
+  if (pattern === 0) {
+    addBullet(state, bx, by, baseAngle, bulletSpeed);
+    return;
+  }
+
+  if (pattern === 1) {
+    [-0.35, 0, 0.35].forEach((offset) => {
+      addBullet(state, bx, by, baseAngle + offset, bulletSpeed * (1 + Math.random() * 0.2));
+    });
+    return;
+  }
+
+  const burstCount = 4 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < burstCount; i += 1) {
+    const randomAngle = (Math.PI * 2 * i) / burstCount + (Math.random() - 0.5) * 0.45;
+    addBullet(state, bx, by, randomAngle, bulletSpeed * (0.8 + Math.random() * 0.5));
+  }
+
+  if (dist < 180) {
+    addBullet(state, bx, by, baseAngle, bulletSpeed * 1.3);
+  }
 }
 
 // ─── Collision helpers ────────────────────────────────────────────────────────
@@ -66,36 +136,56 @@ function circleCircle(ax, ay, ar, bx, by, br) {
 function update(state, keys, dt) {
   if (state.phase !== 'playing') return;
 
-  const MOVE_KEYS = new Set(['w', 'W', 'a', 'A', 's', 'S', 'd', 'D',
-    'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+  const level = getLevelConfig(state.currentLevel);
+  const MOVE_KEYS = new Set([
+    'w',
+    'W',
+    'a',
+    'A',
+    's',
+    'S',
+    'd',
+    'D',
+    'ArrowUp',
+    'ArrowDown',
+    'ArrowLeft',
+    'ArrowRight',
+  ]);
   const isMoving = [...keys].some((k) => MOVE_KEYS.has(k));
 
   state.timeFrozen = !isMoving;
-  if (!isMoving) return; // time frozen — nothing moves
+  if (!isMoving) return;
 
   state.elapsed += dt;
+  state.score += dt * 10;
+
+  if (level.bossMode && state.survivalTimer !== null) {
+    state.survivalTimer = Math.max(0, state.survivalTimer - dt);
+    if (state.survivalTimer <= 0) {
+      state.gameWon = true;
+      state.phase = 'won';
+      return;
+    }
+  }
 
   const speed = PLAYER_SPEED * dt;
   let { x, y } = state.player;
   const r = state.player.r;
 
-  if (keys.has('w') || keys.has('W') || keys.has('ArrowUp'))    y -= speed;
-  if (keys.has('s') || keys.has('S') || keys.has('ArrowDown'))  y += speed;
-  if (keys.has('a') || keys.has('A') || keys.has('ArrowLeft'))  x -= speed;
+  if (keys.has('w') || keys.has('W') || keys.has('ArrowUp')) y -= speed;
+  if (keys.has('s') || keys.has('S') || keys.has('ArrowDown')) y += speed;
+  if (keys.has('a') || keys.has('A') || keys.has('ArrowLeft')) x -= speed;
   if (keys.has('d') || keys.has('D') || keys.has('ArrowRight')) x += speed;
 
-  // Clamp to canvas
   x = Math.max(r, Math.min(W - r, x));
   y = Math.max(r, Math.min(H - r, y));
 
-  // Push player out of walls
   for (const w of WALLS) {
     if (circleRect(x, y, r, w.x, w.y, w.w, w.h)) {
-      // Resolve on axis of least overlap
-      const overlapLeft  = (x + r) - w.x;
-      const overlapRight = (w.x + w.w) - (x - r);
-      const overlapTop   = (y + r) - w.y;
-      const overlapBot   = (w.y + w.h) - (y - r);
+      const overlapLeft = x + r - w.x;
+      const overlapRight = w.x + w.w - (x - r);
+      const overlapTop = y + r - w.y;
+      const overlapBot = w.y + w.h - (y - r);
       const minH = Math.min(overlapLeft, overlapRight);
       const minV = Math.min(overlapTop, overlapBot);
       if (minH < minV) {
@@ -109,55 +199,47 @@ function update(state, keys, dt) {
   state.player.x = x;
   state.player.y = y;
 
-  // ── Enemies ──────────────────────────────────────────────────────────────
   for (const e of state.enemies) {
-    const es = ENEMY_SPEED * dt;
+    const enemyStep = ENEMY_SPEED * level.speed * dt;
     if (e.type === 'patrol-h') {
-      e.x += e.dir * es;
+      e.x += e.dir * enemyStep;
       if (e.x <= e.bound0 || e.x + e.w >= e.bound1) e.dir *= -1;
     } else if (e.type === 'patrol-v') {
-      e.y += e.dir * es;
+      e.y += e.dir * enemyStep;
       if (e.y <= e.bound0 || e.y + e.h >= e.bound1) e.dir *= -1;
     } else if (e.type === 'shooter') {
-      // Slow chase
       const dx = state.player.x - (e.x + e.w / 2);
       const dy = state.player.y - (e.y + e.h / 2);
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      e.x += (dx / dist) * es * 0.55;
-      e.y += (dy / dist) * es * 0.55;
+      e.x += (dx / dist) * enemyStep * 0.55;
+      e.y += (dy / dist) * enemyStep * 0.55;
       e.x = Math.max(0, Math.min(W - e.w, e.x));
       e.y = Math.max(0, Math.min(H - e.h, e.y));
 
-      // Shoot
       e.shootCooldown = (e.shootCooldown || 0) - dt;
+      const shootInterval = level.spawnRate / 1000;
       if (e.shootCooldown <= 0) {
-        e.shootCooldown = SHOOT_INTERVAL;
-        const bx = e.x + e.w / 2;
-        const by = e.y + e.h / 2;
-        const bdx = dx / dist;
-        const bdy = dy / dist;
-        state.bullets.push({
-          id: state.nextBulletId++,
-          x: bx, y: by, vx: bdx * BULLET_SPEED, vy: bdy * BULLET_SPEED, r: BULLET_R,
-        });
+        e.shootCooldown = shootInterval;
+        if (level.bossMode) {
+          spawnBossPattern(state, e, level, dx, dy, dist);
+        } else {
+          const angle = Math.atan2(dy, dx);
+          addBullet(state, e.x + e.w / 2, e.y + e.h / 2, angle, BULLET_SPEED * level.speed);
+        }
       }
     }
   }
 
-  // ── Bullets ───────────────────────────────────────────────────────────────
   state.bullets = state.bullets.filter((b) => {
     b.x += b.vx * dt;
     b.y += b.vy * dt;
-    // Remove if off-screen
     if (b.x < -20 || b.x > W + 20 || b.y < -20 || b.y > H + 20) return false;
-    // Remove if hits a wall
     for (const w of WALLS) {
       if (circleRect(b.x, b.y, b.r, w.x, w.y, w.w, w.h)) return false;
     }
     return true;
   });
 
-  // ── Collision: player vs enemies ─────────────────────────────────────────
   for (const e of state.enemies) {
     if (circleRect(state.player.x, state.player.y, r, e.x, e.y, e.w, e.h)) {
       state.phase = 'lost';
@@ -165,7 +247,6 @@ function update(state, keys, dt) {
     }
   }
 
-  // ── Collision: player vs bullets ─────────────────────────────────────────
   for (const b of state.bullets) {
     if (circleCircle(state.player.x, state.player.y, r, b.x, b.y, b.r)) {
       state.phase = 'lost';
@@ -173,19 +254,23 @@ function update(state, keys, dt) {
     }
   }
 
-  // ── Win condition ─────────────────────────────────────────────────────────
-  if (circleRect(state.player.x, state.player.y, r, GOAL.x, GOAL.y, GOAL.w, GOAL.h)) {
-    state.phase = 'won';
+  if (!level.bossMode) {
+    const reachedGoal = circleRect(state.player.x, state.player.y, r, GOAL.x, GOAL.y, GOAL.w, GOAL.h);
+    const reachedTargetScore = level.targetScore && state.score >= level.targetScore;
+    if (reachedGoal || reachedTargetScore) {
+      state.levelComplete = true;
+      state.phase = 'level-complete';
+    }
   }
 }
 
 // ─── Render ───────────────────────────────────────────────────────────────────
 function render(ctx, state, ts) {
-  // Background
+  const level = getLevelConfig(state.currentLevel);
+
   ctx.fillStyle = '#0f172a';
   ctx.fillRect(0, 0, W, H);
 
-  // Walls
   ctx.fillStyle = '#334155';
   for (const w of WALLS) {
     ctx.fillRect(w.x, w.y, w.w, w.h);
@@ -194,24 +279,23 @@ function render(ctx, state, ts) {
     ctx.strokeRect(w.x, w.y, w.w, w.h);
   }
 
-  // Goal
-  const goalPulse = 0.7 + 0.3 * Math.sin(ts / 400);
-  ctx.shadowColor = '#22c55e';
-  ctx.shadowBlur = 16 * goalPulse;
-  ctx.fillStyle = `rgba(34,197,94,${0.4 + 0.2 * goalPulse})`;
-  ctx.fillRect(GOAL.x, GOAL.y, GOAL.w, GOAL.h);
-  ctx.strokeStyle = '#22c55e';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(GOAL.x, GOAL.y, GOAL.w, GOAL.h);
-  ctx.shadowBlur = 0;
+  if (!level.bossMode) {
+    const goalPulse = 0.7 + 0.3 * Math.sin(ts / 400);
+    ctx.shadowColor = '#22c55e';
+    ctx.shadowBlur = 16 * goalPulse;
+    ctx.fillStyle = `rgba(34,197,94,${0.4 + 0.2 * goalPulse})`;
+    ctx.fillRect(GOAL.x, GOAL.y, GOAL.w, GOAL.h);
+    ctx.strokeStyle = '#22c55e';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(GOAL.x, GOAL.y, GOAL.w, GOAL.h);
+    ctx.shadowBlur = 0;
 
-  // Goal label
-  ctx.fillStyle = '#86efac';
-  ctx.font = 'bold 13px monospace';
-  ctx.textAlign = 'center';
-  ctx.fillText('EXIT', GOAL.x + GOAL.w / 2, GOAL.y + GOAL.h / 2 + 5);
+    ctx.fillStyle = '#86efac';
+    ctx.font = 'bold 13px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('EXIT', GOAL.x + GOAL.w / 2, GOAL.y + GOAL.h / 2 + 5);
+  }
 
-  // Enemies
   for (const e of state.enemies) {
     ctx.shadowColor = '#ef4444';
     ctx.shadowBlur = state.timeFrozen ? 6 : 14;
@@ -223,7 +307,6 @@ function render(ctx, state, ts) {
     ctx.shadowBlur = 0;
   }
 
-  // Bullets
   for (const b of state.bullets) {
     ctx.shadowColor = '#f97316';
     ctx.shadowBlur = state.timeFrozen ? 4 : 10;
@@ -234,7 +317,6 @@ function render(ctx, state, ts) {
     ctx.shadowBlur = 0;
   }
 
-  // Player
   const px = state.player.x;
   const py = state.player.y;
   const pr = state.player.r;
@@ -249,7 +331,6 @@ function render(ctx, state, ts) {
   ctx.stroke();
   ctx.shadowBlur = 0;
 
-  // ── Freeze overlay ─────────────────────────────────────────────────────────
   if (state.timeFrozen) {
     ctx.fillStyle = 'rgba(96,165,250,0.06)';
     ctx.fillRect(0, 0, W, H);
@@ -265,13 +346,19 @@ function render(ctx, state, ts) {
     ctx.fillText('▶ TIME RUNNING', W / 2, 28);
   }
 
-  // ── Overlay screens ────────────────────────────────────────────────────────
-  if (state.phase === 'won') {
-    drawOverlay(ctx, '#14532d', 'rgba(20,83,45,0.92)', '🏆 YOU ESCAPED!',
-      `Active time: ${state.elapsed.toFixed(1)}s`, '#86efac');
-  } else if (state.phase === 'lost') {
-    drawOverlay(ctx, '#7f1d1d', 'rgba(127,29,29,0.92)', '💀 CAUGHT!',
-      'Press R to restart', '#fca5a5');
+  if (state.phase === 'lost') {
+    drawOverlay(ctx, '#7f1d1d', 'rgba(127,29,29,0.92)', '💀 CAUGHT!', 'Press R to restart', '#fca5a5');
+  } else if (state.levelComplete) {
+    drawOverlay(
+      ctx,
+      '#14532d',
+      'rgba(20,83,45,0.92)',
+      'LEVEL COMPLETE',
+      'Start Next Level',
+      '#86efac',
+    );
+  } else if (state.gameWon) {
+    drawOverlay(ctx, '#14532d', 'rgba(20,83,45,0.92)', 'YOU WIN', 'Play Again', '#86efac');
   }
 }
 
@@ -297,15 +384,51 @@ function drawOverlay(ctx, borderColor, bgColor, title, sub, textColor) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function TimeFreezeRunner({ onBack }) {
+  const initialState = createState(1);
+  const initialHud = getUiSnapshot(initialState);
   const canvasRef = useRef(null);
-  const stateRef = useRef(createState());
-  const keysRef  = useRef(new Set());
-  const rafRef   = useRef(null);
-  const lastRef  = useRef(null);
+  const stateRef = useRef(initialState);
+  const keysRef = useRef(new Set());
+  const rafRef = useRef(null);
+  const lastRef = useRef(null);
+  const hudRef = useRef(initialHud);
+  const [hud, setHud] = useState(initialHud);
+
+  const syncHud = useCallback(() => {
+    const next = getUiSnapshot(stateRef.current);
+    const prev = hudRef.current;
+
+    if (
+      prev.currentLevel !== next.currentLevel
+      || prev.score !== next.score
+      || prev.survivalTimer !== next.survivalTimer
+      || prev.gameWon !== next.gameWon
+      || prev.levelComplete !== next.levelComplete
+      || prev.phase !== next.phase
+    ) {
+      hudRef.current = next;
+      setHud(next);
+    }
+  }, []);
+
+  const startLevel = useCallback((levelId) => {
+    stateRef.current = createState(levelId);
+    keysRef.current.clear();
+    lastRef.current = null;
+    syncHud();
+  }, [syncHud]);
 
   const restart = useCallback(() => {
-    stateRef.current = createState();
-  }, []);
+    startLevel(stateRef.current.currentLevel);
+  }, [startLevel]);
+
+  const startNextLevel = useCallback(() => {
+    startLevel(Math.min(stateRef.current.currentLevel + 1, LEVELS.length));
+  }, [startLevel]);
+
+  const playAgain = useCallback(() => {
+    startLevel(1);
+  }, [startLevel]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -334,6 +457,7 @@ export default function TimeFreezeRunner({ onBack }) {
 
       update(stateRef.current, keysRef.current, dt);
       render(ctx, stateRef.current, ts);
+      syncHud();
 
       rafRef.current = requestAnimationFrame(loop);
     }
@@ -345,7 +469,7 @@ export default function TimeFreezeRunner({ onBack }) {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [onBack, restart]);
+  }, [onBack, restart, syncHud]);
 
   return (
     <div className="tfr-wrapper">
@@ -358,6 +482,13 @@ export default function TimeFreezeRunner({ onBack }) {
           🔄 Restart
         </button>
       </div>
+
+      <div className="tfr-stats" aria-live="polite">
+        <span>Level: {hud.currentLevel}</span>
+        <span>Score: {hud.score}</span>
+        {hud.survivalTimer !== null && <span>Survival: {hud.survivalTimer}s</span>}
+      </div>
+
       <canvas
         ref={canvasRef}
         width={W}
@@ -365,9 +496,28 @@ export default function TimeFreezeRunner({ onBack }) {
         className="tfr-canvas"
         aria-label="Time Freeze Runner game canvas"
       />
+
+      {hud.levelComplete && !hud.gameWon && (
+        <div className="tfr-progress-panel">
+          <p>Level Complete</p>
+          <button className="tfr-progress-btn" onClick={startNextLevel}>
+            Start Next Level
+          </button>
+        </div>
+      )}
+
+      {hud.gameWon && (
+        <div className="tfr-progress-panel">
+          <p>You Win</p>
+          <button className="tfr-progress-btn" onClick={playAgain}>
+            Play Again
+          </button>
+        </div>
+      )}
+
       <p className="tfr-controls">
         <strong>Controls:</strong> WASD / Arrow keys to move &nbsp;|&nbsp;
-        Stop moving → time freezes ❄️ &nbsp;|&nbsp; Reach the <span style={{ color: '#22c55e' }}>green EXIT</span> to win &nbsp;|&nbsp;
+        Stop moving → time freezes ❄️ &nbsp;|&nbsp; Reach the <span style={{ color: '#22c55e' }}>green EXIT</span> (Lv 1-3) &nbsp;|&nbsp;
         <kbd>R</kbd> restart &nbsp;|&nbsp; <kbd>ESC</kbd> back
       </p>
     </div>
